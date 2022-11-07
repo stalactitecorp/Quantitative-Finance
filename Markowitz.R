@@ -1,0 +1,175 @@
+///////////////Attribution Notice://////////////////////
+  ///This program was written by Pantelis Tassopoulos, 2020/////
+  ///Contact at pade.tass@gmail.com///////////////////////
+  //////////////////////////////////////////////////////
+  # Web Scraping: List of S&P 500 stocks Credit: https://towardsdatascience.com/exploring-the-sp500-with-r-part-1-scraping-data-acquisition-and-functional-programming-56c9498f38e8
+  library(NLP)
+library(rvest)
+library(magrittr) # needs to be run every time you start R and want to use %>%
+library(quantmod)
+library(comprehenr) # used for list comprehension
+# get the URL for the wikipedia page with all SP500 symbols
+url <- "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+# use that URL to scrape the SP500 table using rvest
+tickers <- url %>%
+  # read the HTML from the webpage
+  read_html() %>%
+  # one way to get table
+  #html_nodes(xpath='//*[@id="mw-content-text"]/div/table[1]') %>%
+  # easier way to get table
+  html_nodes(xpath = '//*[@id="constituents"]') %>% 
+  html_table()
+#create a vector of tickers
+sp500tickers <- tickers[[1]]
+sp500tickers$Symbol
+sp500tickers = sp500tickers %>% mutate(Symbol = case_when(Symbol == "BRK.B" ~ "BRK-B",
+                                                          Symbol == "BF.B" ~ "BF-B",
+                                                          TRUE ~ as.character(Symbol)))
+sp500 = sp500tickers$Symbol
+
+
+getSymbolsList = function(startDate, endDate){
+  List <-c()
+  x = TRUE
+  while(x == TRUE){
+    stockSymbol <- readline()
+    stockSymbol = toupper(stockSymbol)
+    if(stockSymbol == "QUIT."){
+      x = FALSE
+      break;
+    }
+    tryCatch(stonk = try(getSymbols(stockSymbol, from = startDate, to = endDate, warnings=FALSE, auto.assign = FALSE), periodicity = "monthly"),
+             stop("Error at getSymbols"),
+             error = function(e)
+             {
+               print(e$message)
+               #"smthn happened") # or whatever error handling code you want
+             }
+    )
+    dataFramey <- c(stockSymbol)
+    print('Stock added!')
+  }
+  return(List)
+}
+
+giveSymbolsList = function(){
+  x <- read.delim("/Users/pantelistassopoulos/Desktop/stockSymbolsFile.txt", header = TRUE, sep = "\t",)
+  #x <- scan("C:\\Users\\USER\\Desktop\\stockSymbolsFile.txt", what = list(stockNo = 0, stockName = ""))
+  x = x[ , order(colnames(x))]
+  return(x)
+}
+
+Listy = giveSymbolsList()
+print(Listy)
+
+HistoricalPricesColumns = function(symbols, startDate, endDate){
+  
+  options("getSymbols.warning4.0"=FALSE)
+  
+  Cols = c()
+  
+  
+  for(i in 1:ncol(symbols)){
+    Cols = cbind(Cols, as.vector(getSymbols(colnames(symbols[i]), from = startDate, to = endDate, warnings = FALSE, auto.assign = FALSE, periodicity="monthly")[,2]))
+    
+  }
+  df = data.frame(Cols)
+  #for(i in 1:nrow(symbols)){
+  #  names(df)[i] = symbols[i,]
+  #}
+  
+  colnames(df) = colnames(symbols)
+  return(df)
+}
+
+options("getSymbols.warning4.0"=FALSE)
+
+HistoricalCapColumns = function(symbols, startDate, endDate){
+  
+  options("getSymbols.warning4.0"=FALSE)
+  
+  ColsCap = c()
+  
+  for(i in 1:length(symbols)){
+    vec = as.vector(getSymbols(colnames(symbols[i]), from = startDate, to = endDate, warnings = FALSE, auto.assign = FALSE, periodicity="monthly")[,5])*as.vector(getSymbols(colnames(symbols[i]), from = startDate, to = endDate, warnings = FALSE, auto.assign = FALSE, periodicity="monthly")[,2])
+    ColsCap = cbind(ColsCap, vec)
+    
+  }
+  
+  df_Cap = data.frame(ColsCap)
+  #for(i in 1:nrow(symbols)){
+  #  names(df)[i] = symbols[i,]
+  #}
+  
+  colnames(df_Cap) = colnames(symbols)
+  return(df_Cap)
+}
+
+
+MuHistorical = function(histcaps){
+  
+  Mu = c()
+  
+  MarketCap = c()
+  
+  for (i in 1:nrow(histcaps)){
+    MarketCap = c(MarketCap, sum(histcaps[i,]))
+  }
+  
+  for(i in 1:length(symbols)){
+    Mu = c(Mu, histcaps[,i]/MarketCap[i])
+    
+  }
+  
+  return(Mu)
+  
+}
+
+EntropyHistorical = function(symbols, muHistorical){
+  ColsS = c()
+  Mat_muHist = as.vector(muHistorical)
+  Total_Entropy = -Mat_muHist%*%log(Mat_muHist)
+  for(i in 1:length(symbols)){
+    ColsS = cbind(ColsS, -muHistorical[i]*log(muHistorical[i])/Total_Entropy)
+    
+  }
+  df = data.frame(ColsS)
+  colnames(df) = colnames(symbols)
+  return(df)
+  
+}
+
+getEntropyHstorical = function(symbols, startDate, endDate){
+  histcap = HistoricalCapColumns(Listy, startDate, endDate)
+  mu = MuHistorical(histcap)
+  EntropyHist = EntropyHistorical(Listy, mu)
+  return(EntropyHist)
+}
+
+
+
+getEntropyWeights = function(Account_Value){
+  Current_Stocks = to_vec(for(i in 1:length(Listy)) getQuote(colnames(Listy[i]), warnings = FALSE, auto.assign = FALSE)[,2])
+  Current_Vol = to_vec(for(i in 1:length(Listy)) getQuote(colnames(Listy[i]), warnings = FALSE, auto.assign = FALSE)[,5])
+  Current_Cap = Current_Stocks*Current_Vol
+  Current_Mu = c()
+  
+  Total_Cap = sum(Current_Cap)
+  for (i in 1:length(Listy)){
+    Current_Mu = c(Current_Mu, Current_Cap[i]/Total_Cap)
+  }
+  
+  Numbers_Entropy = matrix(0, nrow = 1, ncol = length(Listy))
+  Total_Entropy = -Current_Mu%*%log(Current_Mu)
+  for (i in 1:length(Listy)){
+    Numbers_Entropy[1,i] = -Current_Mu[i]*log(Current_Mu[i])/Total_Entropy
+  }
+  colnames(Numbers_Entropy) = colnames(Listy) 
+  write.csv(Numbers_Entropy,paste(paste("Numbers_Entropy", Sys.time()),".csv"))
+  
+}
+getEntropyWeights(100000)
+///////////////Attribution Notice://////////////////////
+  ///This program was written by Pantelis Tassopoulos, 2020/////
+  ///Contact at pade.tass@gmail.com///////////////////////
+  //////////////////////////////////////////////////////
