@@ -27,6 +27,7 @@ def parse_file(file_name):
     data_set.close()
     infect_dict.pop('', None)
     #The above line is simply a precaution as sometimes one extra line on the file which is empty might be added. The above removes it from dictionary.
+    print(infect_dict)
     return infect_dict
 
 
@@ -96,6 +97,7 @@ def find_potential_zombies(contacts_dic):
     for element in dic_values:
         if element not in list(contacts_dic.keys()):
             potential_zombies.append(element)
+    print(sorted(list(set(potential_zombies))))
     return sorted(list(set(potential_zombies)))
     """Return list of people who do not appear to be sick yet. They appear in
     the contact lists but do not have their own contacts entry.
@@ -197,9 +199,39 @@ def find_most_contacted(contacts_dic):
         persons' contact list.
     """
 
+def auxiliary_recursion_func(contacts_dic, zombie_list, dict_names):
+    
+    #Recursive solution to SECTION 10
+    if len(contacts_dic) == 0:
+        for i in dict_names:
+            dict_names[str(i)] = max(dict_names[str(i)], default = 0)
+        return dict_names
+        
+    else:
+        for i in zombie_list:
+            for j in contacts_dic:
+                if i in contacts_dic[str(j)]:
+                    dict_names[str(j)].append(max(dict_names[str(i)], default = 0) + 1)
+        for i in contacts_dic:
+            for j in zombie_list:
+                if j in contacts_dic[str(i)]:
+                    del(contacts_dic[str(i)][contacts_dic[str(i)].index(str(j))])
+        new_contacts_dic = {keys: values for keys, values in contacts_dic.items() if values}
+        new_zombie_list = find_potential_zombies(new_contacts_dic)
+        return auxiliary_recursion_func(new_contacts_dic, new_zombie_list, dict_names)
 
 
 def find_maximum_distance_from_zombie(contacts_dic, zombie_list):
+
+    #Initialize dictionary with all names of a dataset as keys, this serves to catalogue the data used in the recursion
+    dict_names_list = list(set(list(set(dic_values(contacts_dic))) + list(set(list(contacts_dic.keys())))))
+    dict_names = {}
+    for i in range(len(dict_names_list)):
+        dict_names.update({dict_names_list[i]: []})
+    
+    return auxiliary_recursion_func(contacts_dic, zombie_list, dict_names)
+
+
     """Return the maximum distance from a zombie for everyone in the dataset.
     The maximum distance from a potential zombie is the longest contact
     tracing path downwards in the dataset from a sick person to a potential
@@ -213,7 +245,19 @@ def find_maximum_distance_from_zombie(contacts_dic, zombie_list):
     Returns:
         dic: contains heights (maximum distance) of person from a zombie
     """
-    return {} # delete this line
+
+def dic_values(contacts_dic):
+    
+    #Function that creates a list of values associated with every key in a given dictionary
+    dic_values = []
+    for sublist in list(contacts_dic.values()):
+        for element in sublist:
+            dic_values.append(element)
+    return dic_values
+
+
+    
+
 
 
 def main():
@@ -286,7 +330,7 @@ def main():
     # Complete function find_most_contacted() and add code here to print the
     # output as specified in the brief.
     most_contacted = find_most_contacted(contacts_dic)
-    print(f"Most Contacted; {format_list(most_contacted)}")
+    print(f"Most Contacted: {format_list(most_contacted)}")
 
 
 
@@ -294,6 +338,8 @@ def main():
     # Complete function find_maximum_distance_from_zombie() and add code here
     # to print the output as specified in the brief.
     heights_dic = find_maximum_distance_from_zombie(contacts_dic, zombie_list)
+    for i in range(len(heights_dic)):
+        print(f"{list(heights_dic.keys())[i]}: {list(heights_dic.values())[i]}")
 
 
     ######
